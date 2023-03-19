@@ -1,4 +1,4 @@
-#include "ModernRobotics.h"
+#include "RelativeModernRobotics.h"
 
 /*
  * modernRobotics.cpp
@@ -12,10 +12,18 @@
 # define M_PI           3.14159265358979323846  /* pi */
 using namespace std;
 
-namespace mr {
+namespace relmr {
 	so3 Identity3d=Eigen::Matrix3d::Identity();
 	SE3 Identity4d=Eigen::Matrix4d::Identity();
 	so3 Zero3d=Eigen::Matrix3d::Zero();
+
+	so3 VecToso3(const Vector3d& omg) {
+		so3 m_ret;
+		m_ret << 0, -omg(2), omg(1),
+			omg(2), 0, -omg(0),
+			-omg(1), omg(0), 0;
+		return m_ret;
+	}
 	Matrix6d ad(const Vector6d& V) {
 		Matrix3d omgmat = VecToso3(Vector3d(V(0), V(1), V(2)));
 		Matrix6d result(6, 6);
@@ -24,15 +32,80 @@ namespace mr {
 		result.bottomLeftCorner<3, 3>() = VecToso3(Vector3d(V(3), V(4), V(5)));
 		result.bottomRightCorner<3, 3>() = omgmat;
 		return result;
+	}	
+	se3 VecTose3(const Vector6d& V) {
+		// Separate angular (exponential representation) and linear velocities
+		Eigen::Vector3d exp(V(0), V(1), V(2));
+		Eigen::Vector3d linear(V(3), V(4), V(5));
+		// Fill in values to the appropriate parts of the transformation matrix
+		SE3 m_ret(4, 4);
+		m_ret << VecToso3(exp), linear,
+			0, 0, 0, 0;
+		return m_ret;
 	}
+	Vector3d so3ToVec(const so3& so3mat) {
+		Vector3d v_ret;
+		v_ret << so3mat(2, 1), so3mat(0, 2), so3mat(1, 0);
+		return v_ret;
+	}
+	Vector6d se3ToVec(const se3& T) {
+		Vector6d m_ret(6);
+		m_ret << T(2, 1), T(0, 2), T(1, 0), T(0, 3), T(1, 3), T(2, 3);
+		return m_ret;
+	}
+	Vector4d AxisAng3(const Vector3d& expc3) {
+		Vector4d v_ret;
+		v_ret << Normalize(expc3), expc3.norm();
+		return v_ret;
+	}
+	bool NearZero(const double val) {
+		return (std::abs(val) < .000001);
+	}		
+	Vector3d Normalize(Vector3d V) {
+		V.normalize();
+		return V;
+	}
+	SE3 TransInv(const SE3& transform) {
+		SO3 R = TransToR(transform);
+		Vector3d p = TransToP(transform);
+		SO3 Rt = R.transpose();
+		Vector3d t = -(Rt * p);
+		SE3 inv;
+		inv <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;
+		inv.block(0, 0, 3, 3) = Rt;
+		inv.block(0, 3, 3, 1) = t;
+		inv(3, 3) = 1;
+		return inv;
+	}
+
+	SO3 TransToR(const SE3& T) {
+		Matrix3d R_ret;
+		R_ret<< T(0,0),T(0,1),T(0,2),T(1,0),T(1,1),T(1,2),T(2,0),T(2,1),T(2,2);
+		return R_ret;
+	}	
+	Vector3d TransToP(const SE3& T) {
+		Vector3d p_ret;
+		p_ret<<T(0, 3), T(1, 3), T(2, 3);
+		return p_ret;
+	}	
+	SO3 MatrixExp3(const so3& so3mat) {
+		Vector3d omgtheta = so3ToVec(so3mat);
+		SO3 m_ret = Identity3d;
+		if (NearZero(so3mat.norm())) {
+			return m_ret;
+		}
+		else {
+			double theta = (AxisAng3(omgtheta))(3);
+			Eigen::Matrix3d omgmat = so3mat * (1 / theta);
+			return m_ret + std::sin(theta) * omgmat + ((1 - std::cos(theta)) * (omgmat * omgmat));
+		}
+	}	
 
 	SE3 MatrixExp6(const se3& se3mat) {
 		// Extract the angular velocity vector from the transformation matrix
 		so3 se3mat_cut = se3mat.block<3, 3>(0, 0);
 		Vector3d omgtheta = so3ToVec(se3mat_cut);
-
 		SE3 m_ret(4, 4);
-
 		// If negligible rotation, m_Ret = [[Identity, angular velocty ]]
 		//									[	0	 ,		1		   ]]
 		if (NearZero(omgtheta.norm())) {
@@ -54,76 +127,7 @@ namespace mr {
 				0, 0, 0, 1;
 			return m_ret;
 		}
-	}
-
-	se3 VecTose3(const Vector6d& V) {
-		// Separate angular (exponential representation) and linear velocities
-		Eigen::Vector3d exp(V(0), V(1), V(2));
-		Eigen::Vector3d linear(V(3), V(4), V(5));
-		// Fill in values to the appropriate parts of the transformation matrix
-		SE3 m_ret(4, 4);
-		m_ret << VecToso3(exp), linear,
-			0, 0, 0, 0;
-		return m_ret;
-	}
-	so3 VecToso3(const Vector3d& omg) {
-		so3 m_ret;
-		m_ret << 0, -omg(2), omg(1),
-			omg(2), 0, -omg(0),
-			-omg(1), omg(0), 0;
-		return m_ret;
-	}
-
-	Vector3d so3ToVec(const so3& so3mat) {
-		Vector3d v_ret;
-		v_ret << so3mat(2, 1), so3mat(0, 2), so3mat(1, 0);
-		return v_ret;
-	}
-	Vector6d se3ToVec(const se3& T) {
-		Vector6d m_ret(6);
-		m_ret << T(2, 1), T(0, 2), T(1, 0), T(0, 3), T(1, 3), T(2, 3);
-
-		return m_ret;
-	}
-
-	Vector4d AxisAng3(const Vector3d& expc3) {
-		Vector4d v_ret;
-		v_ret << Normalize(expc3), expc3.norm();
-		return v_ret;
-	}
-
-	bool NearZero(const double val) {
-		return (std::abs(val) < .000001);
-	}
-	SO3 MatrixExp3(const so3& so3mat) {
-		Vector3d omgtheta = so3ToVec(so3mat);
-
-		SO3 m_ret = Identity3d;
-		if (NearZero(so3mat.norm())) {
-			return m_ret;
-		}
-		else {
-			double theta = (AxisAng3(omgtheta))(3);
-			Eigen::Matrix3d omgmat = so3mat * (1 / theta);
-			return m_ret + std::sin(theta) * omgmat + ((1 - std::cos(theta)) * (omgmat * omgmat));
-		}
 	}	
-	SE3 TransInv(const SE3& transform) {
-		SO3 R = TransToR(transform);
-		Vector3d p = TransToP(transform);
-		SO3 Rt = R.transpose();
-		Vector3d t = -(Rt * p);
-		SE3 inv;
-		inv <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;
-		inv.block(0, 0, 3, 3) = Rt;
-		inv.block(0, 3, 3, 1) = t;
-		inv(3, 3) = 1;
-		return inv;
-	}
-	Vector3d Normalize(Vector3d V) {
-		V.normalize();
-		return V;
-	}
 	SE3 FKinSpace(const SE3& M, const ScrewList& Slist, const JVec& thetaList) {
 		SE3 T = M;
 		for (int i = (thetaList.size() - 1); i > -1; i--) {
@@ -131,6 +135,16 @@ namespace mr {
 		}
 		return T;
 	}	
+	Matrix6d Adjoint(const SE3& T) {
+		SO3 R = TransToR(T);
+		Vector3d p = TransToP(T);
+		Matrix6d ad_ret(6, 6);
+		ad_ret = Matrix6d::Zero();
+		ad_ret << R, Matrix3d::Zero(),
+			VecToso3(p) * R, R;
+		return ad_ret;
+	}
+
 	SE3 FKinBody(const SE3& M, const ScrewList& Blist, const JVec& thetaList) {
 		SE3 T = M;
 		for (int i = 0; i < thetaList.size(); i++) {
@@ -150,35 +164,6 @@ namespace mr {
 		}
 		return Jb;
 	}
-	Jacobian AnalyticJacobianBody(SE3 M, const ScrewList& Blist, const JVec& thetaList) {
-		Jacobian Jb =  JacobianBody(Blist,thetaList);
-		SE3 Tsb = FKinBody(M,Blist, thetaList);
-		SO3 Rsb = TransToR(Tsb);
-		Matrix6d AdR = Matrix6d::Identity();
-		AdR.block<3,3>(0,0) = Matrix3d::Identity();;
-		AdR.block<3,3>(3,3) = Rsb;
-		Jacobian Ja = AdR * Jb;  
-		return Ja;
-	}
-
-	pinvJacobian pinvJacobianBody(const ScrewList& Blist, const JVec& thetaList) {
-		Jacobian Jb = JacobianBody(Blist, thetaList);
-		
-		double epsilon = 0.0000001;
-		Eigen::JacobiSVD<Jacobian> svd(Jb ,Eigen::ComputeFullU | Eigen::ComputeFullV);
-		double tolerance = epsilon * std::max(Jb.cols(), Jb.rows()) *svd.singularValues().array().abs()(0);
- 		pinvJacobian pinv_relJb =  svd.matrixV() *  (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
-		return pinv_relJb;
-	}
-	pinvJacobian pinvJacobianSpace(const ScrewList& Slist, const JVec& thetaList) {
-		Jacobian Js = JacobianSpace(Slist, thetaList);
-		
-		double epsilon = 0.0000001;
-		Eigen::JacobiSVD<Jacobian> svd(Js ,Eigen::ComputeFullU | Eigen::ComputeFullV);
-		double tolerance = epsilon * std::max(Js.cols(), Js.rows()) *svd.singularValues().array().abs()(0);
- 		pinvJacobian pinv_relJs =  svd.matrixV() *  (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
-		return pinv_relJs;
-	}	
 	Jacobian JacobianSpace(const ScrewList& Slist, const JVec& thetaList) {
 		Jacobian Js = Slist;	
 		SE3 T = Identity4d;
@@ -190,31 +175,45 @@ namespace mr {
 			Js.col(i) = Adjoint(T) * Slist.col(i);
 		}
 		return Js;
+	}			
+	Jacobian AnalyticJacobianBody(SE3 M, const ScrewList& Blist, const JVec& thetaList) {
+		Jacobian Jb =  JacobianBody(Blist,thetaList);
+		SE3 Tsb = FKinBody(M,Blist, thetaList);
+		SO3 Rsb = TransToR(Tsb);
+		Matrix6d AdR = Matrix6d::Identity();
+		AdR.block<3,3>(0,0) = Matrix3d::Identity();;
+		AdR.block<3,3>(3,3) = Rsb;
+		Jacobian Ja = AdR * Jb;  
+		return Ja;
 	}	
-	SO3 TransToR(const SE3& T) {
-		Matrix3d R_ret;
-		R_ret<< T(0,0),T(0,1),T(0,2),T(1,0),T(1,1),T(1,2),T(2,0),T(2,1),T(2,2);
-		return R_ret;
+	pinvJacobian pinvJacobianBody(const ScrewList& Blist, const JVec& thetaList) {
+		Jacobian Jb = JacobianBody(Blist, thetaList);
+		
+		double epsilon = 0.0000001;
+		Eigen::JacobiSVD<Jacobian> svd(Jb ,Eigen::ComputeFullU | Eigen::ComputeFullV);
+		double tolerance = epsilon * std::max(Jb.cols(), Jb.rows()) *svd.singularValues().array().abs()(0);
+ 		pinvJacobian pinv_relJb =  svd.matrixV() *  (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
+		return pinv_relJb;
 	}	
-	Vector3d TransToP(const SE3& T) {
-		Vector3d p_ret;
-		p_ret<<T(0, 3), T(1, 3), T(2, 3);
-		return p_ret;
-	}	
-	Matrix6d Adjoint(const SE3& T) {
-		SO3 R = TransToR(T);
-		Vector3d p = TransToP(T);
-		Matrix6d ad_ret(6, 6);
-		Matrix6d ZeroMat6d;
-		ZeroMat6d<<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;
-		ad_ret = ZeroMat6d;
-		ad_ret << R, Zero3d,
-			VecToso3(p) * R, R;
-		return ad_ret;
-	}
+	pinvJacobian pinvJacobianSpace(const ScrewList& Slist, const JVec& thetaList) {
+		Jacobian Js = JacobianSpace(Slist, thetaList);
+		
+		double epsilon = 0.0000001;
+		Eigen::JacobiSVD<Jacobian> svd(Js ,Eigen::ComputeFullU | Eigen::ComputeFullV);
+		double tolerance = epsilon * std::max(Js.cols(), Js.rows()) *svd.singularValues().array().abs()(0);
+ 		pinvJacobian pinv_relJs =  svd.matrixV() *  (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
+		return pinv_relJs;
+	}		
 	SO3 RotInv(const SO3& rotMatrix) {
 		return rotMatrix.transpose();
-	}
+	}	
+	SE3 RpToTrans(const Matrix3d& R, const Vector3d& p) {
+		SE3 m_ret(4, 4);
+		m_ret << R, p,
+			0, 0, 0, 1;
+		return m_ret;
+	}	
+
 	Vector6d TwistSE3toSE3(const SE3 &Xd,const SE3 &X,double dt){
 		Vector6d vec=se3ToVec(MatrixLog6(TransInv(X)*Xd))/dt;
 		return vec;
@@ -233,16 +232,6 @@ namespace mr {
 		return vec;
 	}	
 
-	Vector6d AccVeltoVel(const Vector6d &Vd,const Vector6d &V,double dt){
-		Vector6d vec = (Vd-V)/dt;
-		return vec;
-	}
-	SE3 RpToTrans(const Matrix3d& R, const Vector3d& p) {
-		SE3 m_ret(4, 4);
-		m_ret << R, p,
-			0, 0, 0, 1;
-		return m_ret;
-	}
 	so3 MatrixLog3(const SO3& R) {
 		double acosinput = (R.trace() - 1) / 2.0;
 		so3 m_ret =Zero3d;	
@@ -285,7 +274,9 @@ namespace mr {
 		}
 		return m_ret;
 	}	
-	bool IKinBody(const ScrewList& Blist, const SE3& M, const SE3& T,
+
+
+bool IKinBody(const ScrewList& Blist, const SE3& M, const SE3& T,
 		JVec& thetalist, double eomg, double ev) {
 		int i = 0;
 		int maxiterations = 20;
@@ -336,129 +327,15 @@ namespace mr {
 			err = (angular.norm() > eomg || linear.norm() > ev);
 		}
 		return !err;
-	}
-
-	JVec InverseDynamics(const JVec& thetalist, const JVec& dthetalist, const JVec& ddthetalist,
-									const Vector3d& g, const Vector6d& Ftip, const std::vector<SE3>& Mlist,
-									const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-	    // the size of the lists
-		int n = thetalist.size();
-
-		SE3 Mi = SE3::Identity();
-		Matrix6xn Ai = Matrix6xn::Zero();
-		std::vector<ScrewList> AdTi;
-		for (int i = 0; i < n+1; i++) {
-			AdTi.push_back(Matrix6d::Zero());
-		}
-		Matrix6xn_1 Vi = Matrix6xn_1::Zero();    // velocity
-		Matrix6xn_1 Vdi = Matrix6xn_1::Zero();   // acceleration
-
-		Vdi.block(3, 0, 3, 1) = - g;
-		AdTi[n] = Adjoint(TransInv(Mlist[n]));
-		Vector6d Fi = Ftip;
-
-		JVec taulist = JVec::Zero();
-
-		// forward pass
-		for (int i = 0; i < n; i++) {
-			Mi = Mi * Mlist[i];
-			Ai.col(i) = Adjoint(TransInv(Mi))*Slist.col(i);
-
-			AdTi[i] = Adjoint(MatrixExp6(VecTose3(Ai.col(i)*-thetalist(i)))
-			          * TransInv(Mlist[i]));
-
-			Vi.col(i+1) = AdTi[i] * Vi.col(i) + Ai.col(i) * dthetalist(i);
-			Vdi.col(i+1) = AdTi[i] * Vdi.col(i) + Ai.col(i) * ddthetalist(i)
-						   + ad(Vi.col(i+1)) * Ai.col(i) * dthetalist(i); // this index is different from book!
-		}
-
-		// backward pass
-		for (int i = n-1; i >= 0; i--) {
-			Fi = AdTi[i+1].transpose() * Fi + Glist[i] * Vdi.col(i+1)
-			     - ad(Vi.col(i+1)).transpose() * (Glist[i] * Vi.col(i+1));
-			taulist(i) = Fi.transpose() * Ai.col(i);
-		}
-		return taulist;
-	}
-
-	JVec GravityForces(const JVec& thetalist, const Vector3d& g,
-									const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-	    int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector6d dummyForce = Vector6d::Zero();
-		JVec grav = InverseDynamics(thetalist, dummylist, dummylist, g,
-                                                dummyForce, Mlist, Glist, Slist);
-		return grav;
-	}	
-
-	MassMat MassMatrix(const JVec& thetalist,
-                                const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-		int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector3d dummyg = Vector3d::Zero();
-		Vector6d dummyforce = Vector6d::Zero();
-		MassMat M = MassMat::Zero();
-		for (int i = 0; i < n; i++) {
-			JVec ddthetalist = JVec::Zero();
-			ddthetalist(i) = 1;
-			M.col(i) = InverseDynamics(thetalist, dummylist, ddthetalist,
-                             dummyg, dummyforce, Mlist, Glist, Slist);
-		}
-		return M;
-	}
-
-	JVec VelQuadraticForces(const JVec& thetalist, const JVec& dthetalist,const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-		int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector3d dummyg = Vector3d::Zero();
-		Vector6d dummyforce = Vector6d::Zero(6);
-		JVec c = InverseDynamics(thetalist, dthetalist, dummylist,
-                             dummyg, dummyforce, Mlist, Glist, Slist);
-		return c;
-	}	
-	JVec EndEffectorForces(const JVec& thetalist, const Vector6d& Ftip,const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-		int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector3d dummyg = Vector3d::Zero();
-		JVec JTFtip = InverseDynamics(thetalist, dummylist, dummylist,
-                             dummyg, Ftip, Mlist, Glist, Slist);
-		return JTFtip;
-	}
-	JVec ForwardDynamics(const JVec& thetalist, const JVec& dthetalist, const JVec& taulist,
-									const Vector3d& g, const Vector6d& Ftip, const std::vector<SE3>& Mlist,
-									const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-
-		JVec totalForce = taulist - VelQuadraticForces(thetalist, dthetalist, Mlist, Glist, Slist)
-                 							 - GravityForces(thetalist, g, Mlist, Glist, Slist)
-                                             - EndEffectorForces(thetalist, Ftip, Mlist, Glist, Slist);
-		MassMat M = MassMatrix(thetalist, Mlist, Glist, Slist);
-		// Use LDLT since M is positive definite
-	    Eigen::LDLT<MassMat> ldlt(M);
-		Eigen::VectorXd v = Eigen::Map<Eigen::VectorXd>(totalForce.data(), totalForce.size());
-		Eigen::VectorXd x = ldlt.solve(v);
-        // JVec ddthetalist = M.ldlt().solve(totalForce);
-		JVec ddthetalist =  Eigen::Map<JVec>(x.data(), x.size());
-		return ddthetalist;
 	}	
 
 	void EulerStep(JVec& thetalist, JVec& dthetalist, const JVec& ddthetalist, double dt) {
 		thetalist += dthetalist * dt;
 		dthetalist += ddthetalist * dt;
 		return;
-	}
-	JVec ComputedTorque(const JVec& thetalist, const JVec& dthetalist, const JVec& eint,
-		const Vector3d& g, const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist,
-		const ScrewList& Slist, const JVec& thetalistd, const JVec& dthetalistd, const JVec& ddthetalistd,
-		double Kp, double Ki, double Kd) {
-
-		JVec e = thetalistd - thetalist;  // position err
-		JVec tau_feedforward = MassMatrix(thetalist, Mlist, Glist, Slist)*(Kp*e + Ki * (eint + e) + Kd * (dthetalistd - dthetalist));
-
-		Vector6d Ftip = Vector6d::Zero(6);
-		JVec tau_inversedyn = InverseDynamics(thetalist, dthetalist, ddthetalistd, g, Ftip, Mlist, Glist, Slist);
-		JVec tau_computed = tau_feedforward + tau_inversedyn;
-		return tau_computed;
 	}	
+
+
 	double CubicTimeScaling(double Tf, double t) {
 		// a0 = a1 =0
 		double a2 = 3.0/pow(Tf,2);
@@ -523,6 +400,7 @@ namespace mr {
 
 		return s_ds_dds;
 	}	
+
 	JVec Desired_q(const JVec& thetastart, const JVec& thetaend, double t, double Tf, int method) {
 		JVec ret_thetalist = thetastart;
 		double st;
@@ -643,6 +521,8 @@ namespace mr {
 		if(t>Tf)retAcc = Vector6d::Zero();
 		return retAcc;
 	}	
+
+
 	void rotm2eulm(SO3 R,SO3& Rz,SO3& Ry,SO3& Rx){
 		 Vector3d e_a = R.eulerAngles(2, 1, 0); // euler angles
 		 Rz<< cos(e_a[0]), -sin(e_a[0]),0,
@@ -997,28 +877,16 @@ namespace mr {
 		retAcc<<wdots[0],wdots[1],wdots[2],vdots[0],vdots[1],vdots[2];
 		if(t>Tf)retAcc = Vdotend;
 		return retAcc;
-	}			
-	DerivativeJacobianVec DerivativeVectorizeJacobianBody(const ScrewList& Blist, const JVec& thetaList){
-		DerivativeJacobianVec dvecJ = DerivativeJacobianVec::Zero();
-		Jacobian Jb = JacobianBody(Blist,thetaList);
-		for(int i = 0;i<JOINTNUM-1;i++){
-			Vector6d Jb_i = Jb.col(i) ;
-			for(int j= i+1;j<JOINTNUM;j++){
-				Vector6d Jb_j = Jb.col(j) ;
-				Vector6d adJb_iJb_j = ad(Jb_i)*Jb_j;
-				dvecJ.block(i*6,j,6,1) = adJb_iJb_j;
-			}
-		}
-		return dvecJ;
-	}
+	}	
+
 	Jacobian dJacobianBody(const ScrewList& Blist, const JVec& thetaList ,const JVec& dthetaList){
 			Jacobian Jb = JacobianBody(Blist,thetaList);
 			Vector6d Ji,Jj,dJidt,aJiaqj;
 			Jacobian dJb= Jacobian::Zero();
-			for(int i = 0;i<JOINTNUM;i++){
+			for(int i = 0;i<RELJOINTNUM;i++){
 				Ji = Jb.col(i);
 				dJidt = Vector6d::Zero();
-				for(int j =0;j<JOINTNUM;j++){
+				for(int j =0;j<RELJOINTNUM;j++){
 					Jj = Jb.col(j);
 					aJiaqj = Vector6d::Zero();
 					if(i<j){
@@ -1029,7 +897,7 @@ namespace mr {
 				dJb.col(i) = dJidt;
 			}
 			return dJb;
-	}
+	}	
 	Jacobian dAnalyticJacobianBody(const SE3&M, const ScrewList& Blist, const JVec& thetaList ,const JVec& dthetaList){
 			Jacobian dJb = dJacobianBody(Blist,thetaList,dthetaList);
 			Jacobian Jb = JacobianBody(Blist,thetaList);
@@ -1047,7 +915,147 @@ namespace mr {
 			dAd.block<3,3>(3,3) = Rsb*VecToso3(wb);
 			dJa = (dAd*Jb+Ad*dJb);
 			return dJa;
+	}	
+	/*
+	Vector6d AccVeltoVel(const Vector6d &Vd,const Vector6d &V,double dt){
+		Vector6d vec = (Vd-V)/dt;
+		return vec;
 	}
+	JVec InverseDynamics(const JVec& thetalist, const JVec& dthetalist, const JVec& ddthetalist,
+									const Vector3d& g, const Vector6d& Ftip, const std::vector<SE3>& Mlist,
+									const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
+	    // the size of the lists
+		int n = thetalist.size();
+
+		SE3 Mi = SE3::Identity();
+		Matrix6xn Ai = Matrix6xn::Zero();
+		std::vector<ScrewList> AdTi;
+		for (int i = 0; i < n+1; i++) {
+			AdTi.push_back(Matrix6d::Zero());
+		}
+		Matrix6xn_1 Vi = Matrix6xn_1::Zero();    // velocity
+		Matrix6xn_1 Vdi = Matrix6xn_1::Zero();   // acceleration
+
+		Vdi.block(3, 0, 3, 1) = - g;
+		AdTi[n] = Adjoint(TransInv(Mlist[n]));
+		Vector6d Fi = Ftip;
+
+		JVec taulist = JVec::Zero();
+
+		// forward pass
+		for (int i = 0; i < n; i++) {
+			Mi = Mi * Mlist[i];
+			Ai.col(i) = Adjoint(TransInv(Mi))*Slist.col(i);
+
+			AdTi[i] = Adjoint(MatrixExp6(VecTose3(Ai.col(i)*-thetalist(i)))
+			          * TransInv(Mlist[i]));
+
+			Vi.col(i+1) = AdTi[i] * Vi.col(i) + Ai.col(i) * dthetalist(i);
+			Vdi.col(i+1) = AdTi[i] * Vdi.col(i) + Ai.col(i) * ddthetalist(i)
+						   + ad(Vi.col(i+1)) * Ai.col(i) * dthetalist(i); // this index is different from book!
+		}
+
+		// backward pass
+		for (int i = n-1; i >= 0; i--) {
+			Fi = AdTi[i+1].transpose() * Fi + Glist[i] * Vdi.col(i+1)
+			     - ad(Vi.col(i+1)).transpose() * (Glist[i] * Vi.col(i+1));
+			taulist(i) = Fi.transpose() * Ai.col(i);
+		}
+		return taulist;
+	}
+
+	JVec GravityForces(const JVec& thetalist, const Vector3d& g,
+									const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
+	    int n = thetalist.size();
+		JVec dummylist = JVec::Zero();
+		Vector6d dummyForce = Vector6d::Zero();
+		JVec grav = InverseDynamics(thetalist, dummylist, dummylist, g,
+                                                dummyForce, Mlist, Glist, Slist);
+		return grav;
+	}	
+
+	MassMat MassMatrix(const JVec& thetalist,
+                                const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
+		int n = thetalist.size();
+		JVec dummylist = JVec::Zero();
+		Vector3d dummyg = Vector3d::Zero();
+		Vector6d dummyforce = Vector6d::Zero();
+		MassMat M = MassMat::Zero();
+		for (int i = 0; i < n; i++) {
+			JVec ddthetalist = JVec::Zero();
+			ddthetalist(i) = 1;
+			M.col(i) = InverseDynamics(thetalist, dummylist, ddthetalist,
+                             dummyg, dummyforce, Mlist, Glist, Slist);
+		}
+		return M;
+	}
+
+	JVec VelQuadraticForces(const JVec& thetalist, const JVec& dthetalist,const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
+		int n = thetalist.size();
+		JVec dummylist = JVec::Zero();
+		Vector3d dummyg = Vector3d::Zero();
+		Vector6d dummyforce = Vector6d::Zero(6);
+		JVec c = InverseDynamics(thetalist, dthetalist, dummylist,
+                             dummyg, dummyforce, Mlist, Glist, Slist);
+		return c;
+	}	
+	JVec EndEffectorForces(const JVec& thetalist, const Vector6d& Ftip,const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
+		int n = thetalist.size();
+		JVec dummylist = JVec::Zero();
+		Vector3d dummyg = Vector3d::Zero();
+		JVec JTFtip = InverseDynamics(thetalist, dummylist, dummylist,
+                             dummyg, Ftip, Mlist, Glist, Slist);
+		return JTFtip;
+	}
+	JVec ForwardDynamics(const JVec& thetalist, const JVec& dthetalist, const JVec& taulist,
+									const Vector3d& g, const Vector6d& Ftip, const std::vector<SE3>& Mlist,
+									const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
+
+		JVec totalForce = taulist - VelQuadraticForces(thetalist, dthetalist, Mlist, Glist, Slist)
+                 							 - GravityForces(thetalist, g, Mlist, Glist, Slist)
+                                             - EndEffectorForces(thetalist, Ftip, Mlist, Glist, Slist);
+		MassMat M = MassMatrix(thetalist, Mlist, Glist, Slist);
+		// Use LDLT since M is positive definite
+	    Eigen::LDLT<MassMat> ldlt(M);
+		Eigen::VectorXd v = Eigen::Map<Eigen::VectorXd>(totalForce.data(), totalForce.size());
+		Eigen::VectorXd x = ldlt.solve(v);
+        // JVec ddthetalist = M.ldlt().solve(totalForce);
+		JVec ddthetalist =  Eigen::Map<JVec>(x.data(), x.size());
+		return ddthetalist;
+	}	
+
+
+	JVec ComputedTorque(const JVec& thetalist, const JVec& dthetalist, const JVec& eint,
+		const Vector3d& g, const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist,
+		const ScrewList& Slist, const JVec& thetalistd, const JVec& dthetalistd, const JVec& ddthetalistd,
+		double Kp, double Ki, double Kd) {
+
+		JVec e = thetalistd - thetalist;  // position err
+		JVec tau_feedforward = MassMatrix(thetalist, Mlist, Glist, Slist)*(Kp*e + Ki * (eint + e) + Kd * (dthetalistd - dthetalist));
+
+		Vector6d Ftip = Vector6d::Zero(6);
+		JVec tau_inversedyn = InverseDynamics(thetalist, dthetalist, ddthetalistd, g, Ftip, Mlist, Glist, Slist);
+		JVec tau_computed = tau_feedforward + tau_inversedyn;
+		return tau_computed;
+	}	
+
+
+		
+	DerivativeJacobianVec DerivativeVectorizeJacobianBody(const ScrewList& Blist, const JVec& thetaList){
+		DerivativeJacobianVec dvecJ = DerivativeJacobianVec::Zero();
+		Jacobian Jb = JacobianBody(Blist,thetaList);
+		for(int i = 0;i<RELJOINTNUM-1;i++){
+			Vector6d Jb_i = Jb.col(i) ;
+			for(int j= i+1;j<RELJOINTNUM;j++){
+				Vector6d Jb_j = Jb.col(j) ;
+				Vector6d adJb_iJb_j = ad(Jb_i)*Jb_j;
+				dvecJ.block(i*6,j,6,1) = adJb_iJb_j;
+			}
+		}
+		return dvecJ;
+	}
+
+
 
 	DerivativeJacobianVec DerivativeVectorizeAnalyticJacobianBody(const SE3& M, const ScrewList& Blist, const JVec& thetaList){
 		DerivativeJacobianVec dvecJ = DerivativeJacobianVec::Zero();
@@ -1059,9 +1067,9 @@ namespace mr {
 		AdRsb.block<3,3>(3,3) = Rsb;		
 		Jacobian Jb = JacobianBody(Blist,thetaList);
 		Jacobian Ja = AdRsb*Jb;
-		for(int i = 0;i<JOINTNUM-1;i++){
+		for(int i = 0;i<RELJOINTNUM-1;i++){
 			Vector6d Ja_i = Ja.col(i) ;
-			for(int j= i+1;j<JOINTNUM;j++){
+			for(int j= i+1;j<RELJOINTNUM;j++){
 				Vector6d Ja_j = Ja.col(j) ;
 				Vector6d adJa_iJa_j = ad(Ja_i)*Ja_j;
 				dvecJ.block(i*6,j,6,1) = adJa_iJa_j;
@@ -1071,12 +1079,13 @@ namespace mr {
 	}
 	vecJVec vec(const JVec& thetaList){
 		vecJVec vecq = vecJVec::Zero();
-		for(int i = 0;i<JOINTNUM;i++){
+		for(int i = 0;i<RELJOINTNUM;i++){
 			for(int j = 0;j<6;j++){
 				vecq(i*6+j) = thetaList(i);
 			}
 		}
 		return vecq;
 	}
+	*/
 }
 

@@ -98,10 +98,6 @@ namespace mr {
     DerivativeJacobianVec DerivativeVectorizeAnalyticJacobianBody(const SE3& M, const ScrewList& Blist, const JVec& thetaList);
     Jacobian dJacobianBody(const ScrewList& Blist, const JVec& thetaList ,const JVec& dthetaList);
     Jacobian dAnalyticJacobianBody(const SE3&M, const ScrewList& Blist, const JVec& thetaList ,const JVec& dthetaList);
-    double wrapTo2PI(double angle);
-    double wrapToPI(double angle);
-    JVec wrapTo2PI(const JVec& angles);
-    JVec wrapToPI(const JVec& angles);
 }
 
 

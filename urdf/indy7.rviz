@@ -10,9 +10,6 @@ Panels:
         - /RobotModel1
         - /TF1
         - /TF1/Frames1
-        - /Pose1
-        - /Pose2
-        - /Path1
       Splitter Ratio: 0.5
     Tree Height: 708
   - Class: rviz_common/Selection
@@ -54,10 +51,10 @@ Visualization Manager:
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    - Alpha: 1
+    - Alpha: 0.5
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
-      Description File: /home/sung/ros2_humble/src/indy7_ros2_description/urdf/indy7.urdf.xml
+      Description File: ""
       Description Source: Topic
       Description Topic:
         Depth: 5
@@ -171,46 +168,46 @@ Visualization Manager:
       Enabled: true
       Frame Timeout: 15
       Frames:
-        All Enabled: false
+        All Enabled: true
         body:
-          Value: false
+          Value: true
         l_0:
-          Value: false
+          Value: true
         l_1:
-          Value: false
+          Value: true
         l_2:
-          Value: false
+          Value: true
         l_3:
-          Value: false
+          Value: true
         l_4:
-          Value: false
+          Value: true
         l_5:
-          Value: false
+          Value: true
         l_6:
-          Value: false
+          Value: true
         l_tcp:
           Value: true
         r_0:
-          Value: false
+          Value: true
         r_1:
-          Value: false
+          Value: true
         r_2:
-          Value: false
+          Value: true
         r_3:
-          Value: false
+          Value: true
         r_4:
-          Value: false
+          Value: true
         r_5:
-          Value: false
+          Value: true
         r_6:
-          Value: false
+          Value: true
         r_tcp:
           Value: true
         world:
           Value: true
-      Marker Scale: 1
+      Marker Scale: 0.25
       Name: TF
-      Show Arrows: true
+      Show Arrows: false
       Show Axes: true
       Show Names: false
       Tree:
@@ -236,74 +233,6 @@ Visualization Manager:
                             {}
       Update Interval: 0
       Value: true
-    - Alpha: 1
-      Axes Length: 0.10000000149011612
-      Axes Radius: 0.009999999776482582
-      Class: rviz_default_plugins/Pose
-      Color: 255; 25; 0
-      Enabled: false
-      Head Length: 0.30000001192092896
-      Head Radius: 0.10000000149011612
-      Name: Pose
-      Shaft Length: 1
-      Shaft Radius: 0.05000000074505806
-      Shape: Axes
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /new_pose
-      Value: false
-    - Alpha: 1
-      Axes Length: 1
-      Axes Radius: 0.10000000149011612
-      Class: rviz_default_plugins/Pose
-      Color: 255; 25; 0
-      Enabled: true
-      Head Length: 0.30000001192092896
-      Head Radius: 0.10000000149011612
-      Name: Pose
-      Shaft Length: 1
-      Shaft Radius: 0.05000000074505806
-      Shape: Arrow
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /goal_pose
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 25; 255; 0
-      Enabled: false
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.10000000149011612
-      Line Style: Lines
-      Line Width: 0.029999999329447746
-      Name: Path
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 255; 85; 255
-      Pose Style: Axes
-      Radius: 0.0010000000474974513
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /path
-      Value: false
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -350,7 +279,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 7.797469139099121
+      Distance: 3.2011263370513916
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -365,10 +294,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4003985524177551
+      Pitch: 0.5553964376449585
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.41040152311325073
+      Yaw: 0.09041442722082138
     Saved: ~
 Window Geometry:
   Displays:
@@ -386,5 +315,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1908
-  X: -32
-  Y: -32
+  X: 0
+  Y: 0

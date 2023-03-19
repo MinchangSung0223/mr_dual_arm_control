@@ -15,16 +15,17 @@ find_package(nav_msgs REQUIRED)
 
 
 add_library(MR SHARED include/ModernRobotics/ModernRobotics.cpp)
-add_library(MR2 SHARED include/ModernRobotics_origin/modern_robotics.cpp)
-add_executable(mr_dual_arm_control src/mr_dual_arm_control.cpp include/Indy7/Indy7.cpp )
+add_library(relMR SHARED include/ModernRobotics/RelativeModernRobotics.cpp)
+add_executable(mr_dual_arm_control src/mr_dual_arm_control.cpp include/Indy7/Indy7.cpp include/IndyDualArm/IndyDualArm.cpp )
 target_include_directories(mr_dual_arm_control PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ModernRobotics>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ModernRobotics_origin>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Indy7>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/IndyDualArm>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/json>
   $<INSTALL_INTERFACE:include>)
-  target_link_libraries(mr_dual_arm_control jsoncpp_lib MR MR2 )
+  target_link_libraries(mr_dual_arm_control jsoncpp_lib MR relMR )
   target_compile_features(mr_dual_arm_control PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
   mr_dual_arm_control
