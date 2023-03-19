@@ -10,6 +10,8 @@
 #include <ModernRobotics.h>
 #include <RelativeModernRobotics.h>
 #include <random>
+#include <chrono>
+
 
 #include <modern_robotics.h>
 #include <IndyDualArm.h>
@@ -27,9 +29,20 @@ public:
   : Node("joint_state_publisher")
   {
     Tbr= dualarm->Tbr;
+    Tbl= dualarm->Tbl;
+    mr::SO3 Rbr = mr::TransToR(Tbr);
+    mr::SO3 Rbl = mr::TransToR(Tbl);
+
 	  q_r  = dualarm->HOMEPOS_r;
-	  q_l  = dualarm->HOMEPOS_l;
+	  q_l  = dualarm->HOMEPOS_r;
 	  q_rel = dualarm->HOMEPOS_rel;    
+    g<<0,0,-9.8;
+    cout<<"Rbr"<<endl;
+    cout<<Rbr<<endl;
+    cout<<"Rbl"<<endl;
+    cout<<Rbl<<endl;
+    g_r = Rbr.transpose()*g;
+    g_l = Rbr.transpose()*g;
     joint_state_publisher_ = create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
     joint_state_timer_ = create_wall_timer(std::chrono::microseconds(1000), std::bind(&JointStatePublisherNode::control, this));
   }
@@ -47,9 +60,17 @@ private:
 	mr::JVec q_l=mr::JVec::Zero();
 	mr::JVec dq_l=mr::JVec::Zero();
 	mr::JVec ddq_l=mr::JVec::Zero();
+  mr::JVec tau_r=mr::JVec::Zero();
+  mr::JVec tau_l=mr::JVec::Zero();
+  
 	relmr::JVec q_rel = relmr::JVec::Zero();
 	relmr::JVec dq_rel = relmr::JVec::Zero();
 	relmr::JVec ddq_rel = relmr::JVec::Zero();
+
+	Vector6d Ftip = Vector6d::Zero();
+  Vector3d g= Vector3d::Zero();
+	Vector3d g_r= Vector3d::Zero();
+  Vector3d g_l= Vector3d::Zero();
 
   static unsigned int print_count;
   int CONTROL_RATE = 1000;
@@ -59,23 +80,35 @@ private:
   double t = 0;
 	mr::SE3 Xd = mr::SE3::Identity();
   mr::SE3 Tbr =mr::SE3::Identity();
+  mr::SE3 Tbl =mr::SE3::Identity();
   void control()
   {
-    Xd<<-1,0,0,0.1*sin(2*M_PI*t/2.0),
-        0,1,0,0.1*cos(2*M_PI*t/2.0),
-        0,0,-1,0.1,
-        0,0,0,1;
-    mr::SE3 Treef = mr::FKinSpace(dualarm->M,dualarm->Slist,q_r);
-    Treef = Tbr*Treef;
-    mr::SE3 Trel =  relmr::FKinSpace(dualarm->relM,dualarm->relSlist,q_rel);
-    mr::SE3 Tleef = Treef*Trel;
-    relmr::Jacobian Jb_rel=relmr::JacobianBody(dualarm->relBlist,q_rel);
-    relmr::pinvJacobian pinvJb_rel = Jb_rel.transpose()*(Jb_rel*Jb_rel.transpose()).inverse();
-    mr::Vector6d Xe  =mr::se3ToVec( mr::MatrixLog6(mr::TransInv(Trel)*Xd));
-    dq_rel =1000.0*pinvJb_rel*Xe;
+    // Xd<<-1,0,0,0.1*sin(2*M_PI*t/2.0),
+    //     0,1,0,0.1*cos(2*M_PI*t/2.0),
+    //     0,0,-1,0.1,
+    //     0,0,0,1;
+    // mr::SE3 Treef = mr::FKinSpace(dualarm->M,dualarm->Slist,q_r);
+    // Treef = Tbr*Treef;
+    // mr::SE3 Trel =  relmr::FKinSpace(dualarm->relM,dualarm->relSlist,q_rel);
+    // mr::SE3 Tleef = Treef*Trel;
+    // relmr::Jacobian Jb_rel=relmr::JacobianBody(dualarm->relBlist,q_rel);
+    // relmr::pinvJacobian pinvJb_rel = Jb_rel.transpose()*(Jb_rel*Jb_rel.transpose()).inverse();
+    // mr::Vector6d Xe  =mr::se3ToVec( mr::MatrixLog6(mr::TransInv(Trel)*Xd));
+    // dq_rel =1000.0*pinvJb_rel*Xe;
 
-    relmr::EulerStep(q_rel,dq_rel,ddq_rel,dt);
-    dualarm->get_q_r_q_l(q_rel,q_r,q_l );
+    //relmr::EulerStep(q_rel,dq_rel,ddq_rel,dt);
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+     ddq_r = mr::ForwardDynamics(q_r,dq_r, tau_r, g_r, Ftip, 
+                    dualarm->Mlist,dualarm->Glist, dualarm->Slist);
+     ddq_l = mr::ForwardDynamics(q_l,dq_l, tau_l, g_l, Ftip, 
+                    dualarm->Mlist,dualarm->Glist, dualarm->Slist);         
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+    std::cout << "Elapsed time: " << elapsed_us << " us" << std::endl;
+    mr::EulerStep(q_r,dq_r,ddq_r,dt);
+    mr::EulerStep(q_l,dq_l,ddq_l,dt);
+   // dualarm->get_q_r_q_l(q_rel,q_r,q_l );
 
     t=  t+dt;
 
@@ -86,9 +119,9 @@ private:
     joint_state_msg->header.stamp = this->now();
     joint_state_msg->name = {"l_joint_0", "l_joint_1","l_joint_2","l_joint_3","l_joint_4","l_joint_5","r_joint_0", "r_joint_1","r_joint_2","r_joint_3","r_joint_4","r_joint_5"};
     joint_state_msg->position = {q_l[0],q_l[1],q_l[2],q_l[3],q_l[4],q_l[5],q_r[0],q_r[1],q_r[2],q_r[3],q_r[4],q_r[5]};
-
-    if(++print_count>=10){
-      joint_state_publisher_->publish(*joint_state_msg);
+    joint_state_publisher_->publish(*joint_state_msg);
+    if(++print_count>=5){
+      
       print_count = 0;
     }
 

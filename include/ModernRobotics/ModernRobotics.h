@@ -22,6 +22,7 @@ namespace mr {
     typedef Eigen::Matrix<double, 6, JOINTNUM> Matrix6xn;
     typedef Eigen::Matrix<double, 6, JOINTNUM+1> Matrix6xn_1;
     typedef Eigen::Matrix<double, JOINTNUM, JOINTNUM> MassMat;
+    
     Vector6d se3ToVec(const se3& T);
     Matrix6d ad(const Vector6d&V);
     se3 VecTose3(const Vector6d& V) ;

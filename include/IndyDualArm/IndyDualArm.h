@@ -35,8 +35,8 @@ public:
 	SE3 Tbr;				
 	SE3 Tbl;		
 
-	vector<Matrix6d> Glist;	
-	vector<SE3> Mlist;			
+	vector<mr::Matrix6d> Glist;	
+	vector<mr::SE3> Mlist;			
 
 
 	IndyDualArm(const std::string mr_json_path);

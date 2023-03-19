@@ -13,14 +13,28 @@
 using namespace std;
 
 namespace mr {
-	so3 Identity3d=Eigen::Matrix3d::Identity();
-	SE3 Identity4d=Eigen::Matrix4d::Identity();
-	so3 Zero3d=Eigen::Matrix3d::Zero();
+	JVec dummylist = JVec::Zero();
+	Vector3d dummyg = Vector3d::Zero();
+	Vector6d dummyforce = Vector6d::Zero();
+	SE3 SE3Identity = SE3::Identity();
+	SE3 SE3Zero = SE3::Zero();
+	
+	Matrix3d Matrix3dIdentity = Matrix3d::Identity();
+	Matrix3d Matrix3dZero = Matrix3d::Zero();
+	so3 so3Zero = so3::Zero();
+	se3 se3Zero = se3::Zero();
+	Matrix6d Matrix6dIdentity= Matrix6d::Identity();
+	Matrix6d Matrix6dZero = Matrix6d::Zero();
+	Matrix6xn Matrix6xnZero = Matrix6xn::Zero();
+	Matrix6xn_1 Matrix6xn_1Zero = Matrix6xn_1::Zero();
+	JVec JVecZero = JVecZero;
+	Vector6d Vector6dZero= Vector6d::Zero();
+	MassMat MassMatZero= MassMat::Zero();
 	Matrix6d ad(const Vector6d& V) {
 		Matrix3d omgmat = VecToso3(Vector3d(V(0), V(1), V(2)));
 		Matrix6d result(6, 6);
 		result.topLeftCorner<3, 3>() = omgmat;
-		result.topRightCorner<3, 3>() = Zero3d;
+		result.topRightCorner<3, 3>() = Matrix3dZero;
 		result.bottomLeftCorner<3, 3>() = VecToso3(Vector3d(V(3), V(4), V(5)));
 		result.bottomRightCorner<3, 3>() = omgmat;
 		return result;
@@ -30,81 +44,97 @@ namespace mr {
 		// Extract the angular velocity vector from the transformation matrix
 		so3 se3mat_cut = se3mat.block<3, 3>(0, 0);
 		Vector3d omgtheta = so3ToVec(se3mat_cut);
-
-		SE3 m_ret(4, 4);
-
+		SE3 m_ret = SE3Identity;
 		// If negligible rotation, m_Ret = [[Identity, angular velocty ]]
 		//									[	0	 ,		1		   ]]
 		if (NearZero(omgtheta.norm())) {
 			// Reuse previous variables that have our required size
-			se3mat_cut<<1, 0 , 0 , 0 ,1 ,0 , 0 , 0 ,1;
+			se3mat_cut = SE3Identity.block<3, 3>(0, 0);
 			omgtheta << se3mat(0, 3), se3mat(1, 3), se3mat(2, 3);
-			m_ret << se3mat_cut, omgtheta,
-				0, 0, 0, 1;
+			m_ret.block<3, 3>(0, 0) = se3mat_cut;
+			m_ret.block<3, 1>(0, 3) = omgtheta;
 			return m_ret;
 		}
 		// If not negligible, MR page 105
 		else {
-			double theta = (AxisAng3(omgtheta))(3);
-			Eigen::Matrix3d omgmat = se3mat.block<3, 3>(0, 0) / theta;
-			Eigen::Matrix3d expExpand = Identity3d* theta + (1 - std::cos(theta)) * omgmat + ((theta - std::sin(theta)) * (omgmat * omgmat));
-			Eigen::Vector3d linear(se3mat(0, 3), se3mat(1, 3), se3mat(2, 3));
-			Eigen::Vector3d GThetaV = (expExpand*linear) / theta;
-			m_ret << MatrixExp3(se3mat_cut), GThetaV,
-				0, 0, 0, 1;
+			double theta = sqrt(omgtheta(0)*omgtheta(0)+omgtheta(1)*omgtheta(1)+omgtheta(2)*omgtheta(2));
+			Matrix3d omgmat = se3mat.block<3, 3>(0, 0) / theta;
+			Matrix3d expExpand = Matrix3dIdentity* theta + (1 - std::cos(theta)) * omgmat + ((theta - std::sin(theta)) * (omgmat * omgmat));
+			Vector3d linear(se3mat(0, 3), se3mat(1, 3), se3mat(2, 3));
+			Vector3d GThetaV = (expExpand*linear) / theta;
+			m_ret.block<3, 3>(0, 0) = MatrixExp3(se3mat_cut);
+			m_ret.block<3, 1>(0, 3) = GThetaV;
 			return m_ret;
 		}
 	}
 
+	Matrix3d Skew(const Vector3d& w) {
+		Matrix3d w_hat;
+		w_hat <<  0, -w(2), w(1),
+					w(2), 0, -w(0),
+				-w(1), w(0), 0;
+		return w_hat;
+	}
 	se3 VecTose3(const Vector6d& V) {
 		// Separate angular (exponential representation) and linear velocities
-		Eigen::Vector3d exp(V(0), V(1), V(2));
-		Eigen::Vector3d linear(V(3), V(4), V(5));
+		Vector3d exp(V(0), V(1), V(2));
+		Vector3d linear(V(3), V(4), V(5));
 		// Fill in values to the appropriate parts of the transformation matrix
-		SE3 m_ret(4, 4);
-		m_ret << VecToso3(exp), linear,
-			0, 0, 0, 0;
+		SE3 m_ret=SE3Zero;
+		m_ret.block(0,0,3,3) = VecToso3(exp);
+		m_ret.block(0,3,3,1) = linear;
 		return m_ret;
 	}
 	so3 VecToso3(const Vector3d& omg) {
-		so3 m_ret;
-		m_ret << 0, -omg(2), omg(1),
-			omg(2), 0, -omg(0),
-			-omg(1), omg(0), 0;
+		so3 m_ret = so3Zero;
+		m_ret(0,1) = -omg(2);
+		m_ret(0,2) = omg(1);
+		m_ret(1,0) = omg(2);
+		m_ret(1,2) = -omg(0);
+		m_ret(2,0) = -omg(1);
+		m_ret(2,1) = omg(0);
 		return m_ret;
-	}
+	}	
 
 	Vector3d so3ToVec(const so3& so3mat) {
-		Vector3d v_ret;
-		v_ret << so3mat(2, 1), so3mat(0, 2), so3mat(1, 0);
-		return v_ret;
+		Vector3d vec;
+		vec(0) =so3mat(2, 1);
+		vec(1) =so3mat(0, 2);
+		vec(2) = so3mat(1, 0);
+		return vec;
 	}
 	Vector6d se3ToVec(const se3& T) {
-		Vector6d m_ret(6);
-		m_ret << T(2, 1), T(0, 2), T(1, 0), T(0, 3), T(1, 3), T(2, 3);
-
-		return m_ret;
+		Vector6d vec;
+		vec(0) = T(2, 1);
+		vec(1) = T(0, 2);
+		vec(2) = T(1, 0);
+		vec(3) = T(0, 3);
+		vec(4) = T(1, 3);
+		vec(5) = T(2, 3);
+		return vec;
 	}
 
 	Vector4d AxisAng3(const Vector3d& expc3) {
-		Vector4d v_ret;
-		v_ret << Normalize(expc3), expc3.norm();
-		return v_ret;
+		Vector4d vec;
+		double norm_val = sqrt(expc3(0)*expc3(0)+expc3(1)*expc3(1)+expc3(2)*expc3(2));
+		vec(0) = expc3(0)/norm_val;
+		vec(1) = expc3(1)/norm_val;
+		vec(2) = expc3(2)/norm_val;
+		vec(3) = norm_val;
+		return vec;
 	}
-
 	bool NearZero(const double val) {
 		return (std::abs(val) < .000001);
 	}
 	SO3 MatrixExp3(const so3& so3mat) {
 		Vector3d omgtheta = so3ToVec(so3mat);
-
-		SO3 m_ret = Identity3d;
+		SO3 m_ret = Matrix3dIdentity;
 		if (NearZero(so3mat.norm())) {
 			return m_ret;
 		}
 		else {
-			double theta = (AxisAng3(omgtheta))(3);
-			Eigen::Matrix3d omgmat = so3mat * (1 / theta);
+			double theta = sqrt(omgtheta(0)*omgtheta(0)+omgtheta(1)*omgtheta(1)+omgtheta(2)*omgtheta(2));
+			so3 omgmat = so3mat * (1 / theta);
 			return m_ret + std::sin(theta) * omgmat + ((1 - std::cos(theta)) * (omgmat * omgmat));
 		}
 	}	
@@ -113,11 +143,9 @@ namespace mr {
 		Vector3d p = TransToP(transform);
 		SO3 Rt = R.transpose();
 		Vector3d t = -(Rt * p);
-		SE3 inv;
-		inv <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;
+		SE3 inv=SE3Identity;
 		inv.block(0, 0, 3, 3) = Rt;
 		inv.block(0, 3, 3, 1) = t;
-		inv(3, 3) = 1;
 		return inv;
 	}
 	Vector3d Normalize(Vector3d V) {
@@ -126,21 +154,21 @@ namespace mr {
 	}
 	SE3 FKinSpace(const SE3& M, const ScrewList& Slist, const JVec& thetaList) {
 		SE3 T = M;
-		for (int i = (thetaList.size() - 1); i > -1; i--) {
+		for (int i = (JOINTNUM - 1); i > -1; i--) {
 			T = MatrixExp6(VecTose3(Slist.col(i)*thetaList(i))) * T;
 		}
 		return T;
 	}	
 	SE3 FKinBody(const SE3& M, const ScrewList& Blist, const JVec& thetaList) {
 		SE3 T = M;
-		for (int i = 0; i < thetaList.size(); i++) {
+		for (int i = 0; i < JOINTNUM; i++) {
 			T = T * MatrixExp6(VecTose3(Blist.col(i)*thetaList(i)));
 		}
 		return T;
 	}		
 	Jacobian JacobianBody(const ScrewList& Blist, const JVec& thetaList) {
 		Jacobian Jb = Blist;
-		SE3 T = Identity4d;
+		SE3 T = SE3Identity;
 		Vector6d bListTemp;
 		for (int i = thetaList.size() -2; i >= 0; i--) {
 			bListTemp << Blist.col(i + 1) * thetaList(i + 1);
@@ -154,8 +182,8 @@ namespace mr {
 		Jacobian Jb =  JacobianBody(Blist,thetaList);
 		SE3 Tsb = FKinBody(M,Blist, thetaList);
 		SO3 Rsb = TransToR(Tsb);
-		Matrix6d AdR = Matrix6d::Identity();
-		AdR.block<3,3>(0,0) = Matrix3d::Identity();;
+		Matrix6d AdR = Matrix6dIdentity;
+		AdR.block<3,3>(0,0) = Matrix3dIdentity;;
 		AdR.block<3,3>(3,3) = Rsb;
 		Jacobian Ja = AdR * Jb;  
 		return Ja;
@@ -181,9 +209,9 @@ namespace mr {
 	}	
 	Jacobian JacobianSpace(const ScrewList& Slist, const JVec& thetaList) {
 		Jacobian Js = Slist;	
-		SE3 T = Identity4d;
+		SE3 T = SE3Identity;
 		Vector6d sListTemp;
-		for (int i = 1; i < thetaList.size(); i++) {
+		for (int i = 1; i < JOINTNUM; i++) {
 			sListTemp << Slist.col(i - 1) * thetaList(i - 1);
 			T = T * MatrixExp6(VecTose3(sListTemp));
 			// std::cout << "array: " << sListTemp << std::endl;
@@ -192,24 +220,17 @@ namespace mr {
 		return Js;
 	}	
 	SO3 TransToR(const SE3& T) {
-		Matrix3d R_ret;
-		R_ret<< T(0,0),T(0,1),T(0,2),T(1,0),T(1,1),T(1,2),T(2,0),T(2,1),T(2,2);
-		return R_ret;
-	}	
+		return SO3(T.block<3, 3>(0, 0));
+	}
+
 	Vector3d TransToP(const SE3& T) {
-		Vector3d p_ret;
-		p_ret<<T(0, 3), T(1, 3), T(2, 3);
-		return p_ret;
-	}	
+		return T.block<3, 1>(0, 3);
+	}
 	Matrix6d Adjoint(const SE3& T) {
-		SO3 R = TransToR(T);
-		Vector3d p = TransToP(T);
-		Matrix6d ad_ret(6, 6);
-		Matrix6d ZeroMat6d;
-		ZeroMat6d<<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0;
-		ad_ret = ZeroMat6d;
-		ad_ret << R, Zero3d,
-			VecToso3(p) * R, R;
+		Matrix6d ad_ret=Matrix6dZero;
+		ad_ret.block<3, 3>(0, 0) = T.block<3, 3>(0, 0);
+		ad_ret.block<3, 3>(3, 0) = VecToso3(T.block<3, 1>(0, 3)) * T.block<3, 3>(0, 0);
+		ad_ret.block<3, 3>(3, 3) = T.block<3, 3>(0, 0);
 		return ad_ret;
 	}
 	SO3 RotInv(const SO3& rotMatrix) {
@@ -238,24 +259,24 @@ namespace mr {
 		return vec;
 	}
 	SE3 RpToTrans(const Matrix3d& R, const Vector3d& p) {
-		SE3 m_ret(4, 4);
-		m_ret << R, p,
-			0, 0, 0, 1;
+		SE3 m_ret = SE3Identity;
+		m_ret.block<3, 3>(0, 0) = R;
+		m_ret.block<3, 1>(0, 3) = p;
 		return m_ret;
 	}
 	so3 MatrixLog3(const SO3& R) {
 		double acosinput = (R.trace() - 1) / 2.0;
-		so3 m_ret =Zero3d;	
+		so3 m_ret =Matrix3dZero;	
 		if (acosinput >= 1)
 			return m_ret;
 		else if (acosinput <= -1) {
-			Eigen::Vector3d omg;
+			Vector3d omg;
 			if (!NearZero(1 + R(2, 2)))
-				omg = (1.0 / std::sqrt(2 * (1 + R(2, 2))))*Eigen::Vector3d(R(0, 2), R(1, 2), 1 + R(2, 2));
+				omg = (1.0 / std::sqrt(2 * (1 + R(2, 2))))*Vector3d(R(0, 2), R(1, 2), 1 + R(2, 2));
 			else if (!NearZero(1 + R(1, 1)))
-				omg = (1.0 / std::sqrt(2 * (1 + R(1, 1))))*Eigen::Vector3d(R(0, 1), 1 + R(1, 1), R(2, 1));
+				omg = (1.0 / std::sqrt(2 * (1 + R(1, 1))))*Vector3d(R(0, 1), 1 + R(1, 1), R(2, 1));
 			else
-				omg = (1.0 / std::sqrt(2 * (1 + R(0, 0))))*Eigen::Vector3d(1 + R(0, 0), R(1, 0), R(2, 0));
+				omg = (1.0 / std::sqrt(2 * (1 + R(0, 0))))*Vector3d(1 + R(0, 0), R(1, 0), R(2, 0));
 			m_ret = VecToso3(M_PI * omg);
 			return m_ret;
 		}
@@ -266,25 +287,26 @@ namespace mr {
 		}
 	}	
 	se3 MatrixLog6(const SE3& T) {
-		se3 m_ret(4, 4);
+		se3 m_ret = SE3Zero;
 		SO3 R = TransToR(T);
 		Vector3d p = TransToP(T);
 		so3 omgmat = MatrixLog3(R);
 
 		if (NearZero(omgmat.norm())) {
-			m_ret << Zero3d, p,
-				0, 0, 0, 0;
+			m_ret.block<3, 3>(0, 0) = Matrix3dZero;
+			m_ret.block<3, 1>(0, 3) = p;
 		}
 		else {
 			double theta = std::acos((R.trace() - 1) / 2.0);
-			Eigen::Matrix3d logExpand1 = Identity3d - omgmat / 2.0;
-			Eigen::Matrix3d logExpand2 = (1.0 / theta - 1.0 / std::tan(theta / 2.0) / 2)*omgmat*omgmat / theta;
-			Eigen::Matrix3d logExpand = logExpand1 + logExpand2;
-			m_ret << omgmat, logExpand*p,
-				0, 0, 0, 0;
+			Matrix3d logExpand1 = Matrix3dIdentity - omgmat / 2.0;
+			Matrix3d logExpand2 = (1.0 / theta - 1.0 / std::tan(theta / 2.0) / 2)*omgmat*omgmat / theta;
+			Matrix3d logExpand = logExpand1 + logExpand2;
+			m_ret.block<3, 3>(0, 0) = omgmat;
+			m_ret.block<3, 1>(0, 3) = logExpand*p;
 		}
 		return m_ret;
-	}	
+	}
+
 	bool IKinBody(const ScrewList& Blist, const SE3& M, const SE3& T,
 		JVec& thetalist, double eomg, double ev) {
 		int i = 0;
@@ -343,29 +365,22 @@ namespace mr {
 									const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
 	    // the size of the lists
 		int n = thetalist.size();
-
-		SE3 Mi = SE3::Identity();
-		Matrix6xn Ai = Matrix6xn::Zero();
-		std::vector<ScrewList> AdTi;
-		for (int i = 0; i < n+1; i++) {
-			AdTi.push_back(Matrix6d::Zero());
-		}
-		Matrix6xn_1 Vi = Matrix6xn_1::Zero();    // velocity
-		Matrix6xn_1 Vdi = Matrix6xn_1::Zero();   // acceleration
-
+		SE3 Mi = SE3Identity;
+		Matrix6xn Ai = Matrix6xnZero;
+		std::vector<ScrewList> AdTi(n+1, Matrix6xnZero);
+		Matrix6xn_1 Vi = Matrix6xn_1Zero;    // velocity
+		Matrix6xn_1 Vdi = Matrix6xn_1Zero;   // acceleration
+		
 		Vdi.block(3, 0, 3, 1) = - g;
 		AdTi[n] = Adjoint(TransInv(Mlist[n]));
 		Vector6d Fi = Ftip;
-
-		JVec taulist = JVec::Zero();
-
+		JVec taulist = JVecZero;
 		// forward pass
-		for (int i = 0; i < n; i++) {
-			Mi = Mi * Mlist[i];
-			Ai.col(i) = Adjoint(TransInv(Mi))*Slist.col(i);
 
-			AdTi[i] = Adjoint(MatrixExp6(VecTose3(Ai.col(i)*-thetalist(i)))
-			          * TransInv(Mlist[i]));
+		for (int i = 0; i < JOINTNUM; i++) {
+			Mi *= Mlist[i];
+			Ai.col(i) = Adjoint(TransInv(Mi))*Slist.col(i);
+			AdTi[i] = Adjoint(MatrixExp6(VecTose3(Ai.col(i)*-thetalist(i)))* TransInv(Mlist[i]));
 
 			Vi.col(i+1) = AdTi[i] * Vi.col(i) + Ai.col(i) * dthetalist(i);
 			Vdi.col(i+1) = AdTi[i] * Vdi.col(i) + Ai.col(i) * ddthetalist(i)
@@ -378,28 +393,23 @@ namespace mr {
 			     - ad(Vi.col(i+1)).transpose() * (Glist[i] * Vi.col(i+1));
 			taulist(i) = Fi.transpose() * Ai.col(i);
 		}
+
 		return taulist;
 	}
 
 	JVec GravityForces(const JVec& thetalist, const Vector3d& g,
 									const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-	    int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector6d dummyForce = Vector6d::Zero();
 		JVec grav = InverseDynamics(thetalist, dummylist, dummylist, g,
-                                                dummyForce, Mlist, Glist, Slist);
+                                                dummyforce, Mlist, Glist, Slist);
 		return grav;
 	}	
 
 	MassMat MassMatrix(const JVec& thetalist,
                                 const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-		int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector3d dummyg = Vector3d::Zero();
-		Vector6d dummyforce = Vector6d::Zero();
+
 		MassMat M = MassMat::Zero();
-		for (int i = 0; i < n; i++) {
-			JVec ddthetalist = JVec::Zero();
+		for (int i = 0; i < JOINTNUM; i++) {
+			JVec ddthetalist = JVecZero;
 			ddthetalist(i) = 1;
 			M.col(i) = InverseDynamics(thetalist, dummylist, ddthetalist,
                              dummyg, dummyforce, Mlist, Glist, Slist);
@@ -408,18 +418,11 @@ namespace mr {
 	}
 
 	JVec VelQuadraticForces(const JVec& thetalist, const JVec& dthetalist,const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-		int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector3d dummyg = Vector3d::Zero();
-		Vector6d dummyforce = Vector6d::Zero(6);
 		JVec c = InverseDynamics(thetalist, dthetalist, dummylist,
                              dummyg, dummyforce, Mlist, Glist, Slist);
 		return c;
 	}	
 	JVec EndEffectorForces(const JVec& thetalist, const Vector6d& Ftip,const std::vector<SE3>& Mlist, const std::vector<Matrix6d>& Glist, const ScrewList& Slist) {
-		int n = thetalist.size();
-		JVec dummylist = JVec::Zero();
-		Vector3d dummyg = Vector3d::Zero();
 		JVec JTFtip = InverseDynamics(thetalist, dummylist, dummylist,
                              dummyg, Ftip, Mlist, Glist, Slist);
 		return JTFtip;
@@ -535,25 +538,25 @@ namespace mr {
 		return ret_thetalist;
 	}	
 	JVec Desired_dq(const JVec& thetastart, const JVec& thetaend, double t, double Tf, int method) {
-		JVec ret_dthetalist = JVec::Zero();
+		JVec ret_dthetalist = JVecZero;
 		double dst;
 		if (method == 3)
 			dst = CubicTimeScalingDot(Tf, t);
 		else
 			dst = QuinticTimeScalingDot(Tf, t);
 		ret_dthetalist = dst * thetaend +  - dst*thetastart;
-		if(t>Tf)ret_dthetalist = JVec::Zero();
+		if(t>Tf)ret_dthetalist = JVecZero;
 		return ret_dthetalist;
 	}		
 	JVec Desired_ddq(const JVec& thetastart, const JVec& thetaend, double t, double Tf, int method) {
-		JVec ret_ddthetalist = JVec::Zero();
+		JVec ret_ddthetalist = JVecZero;
 		double ddst;
 		if (method == 3)
 			ddst = CubicTimeScalingDdot(Tf, t);
 		else
 			ddst = QuinticTimeScalingDdot(Tf, t);
 		ret_ddthetalist = ddst * thetaend +  - ddst*thetastart;
-		if(t>Tf)ret_ddthetalist = JVec::Zero();
+		if(t>Tf)ret_ddthetalist = JVecZero;
 		return ret_ddthetalist;
 	}		
 
@@ -577,7 +580,7 @@ namespace mr {
 			dst = QuinticTimeScalingDot(Tf, t);
 		se3 Ttemp = MatrixLog6(TransInv(Xstart)*Xend);
 		Vector6d retTwist = se3ToVec(Ttemp*dst);
-		if(t>Tf)retTwist = Vector6d::Zero();
+		if(t>Tf)retTwist = Vector6dZero;
 		return retTwist;
 	}
 	Vector6d ScrewTwistDot(const SE3& Xstart, const SE3& Xend, double t, double Tf, int method) {
@@ -588,7 +591,7 @@ namespace mr {
 			ddst = QuinticTimeScalingDdot(Tf, t);
 		se3 Ttemp = MatrixLog6(TransInv(Xstart)*Xend);
 		Vector6d retTwistdot = se3ToVec(Ttemp*ddst);
-		if(t>Tf)retTwistdot = Vector6d::Zero();
+		if(t>Tf)retTwistdot = Vector6dZero;
 
 		return retTwistdot;
 	}			
@@ -623,7 +626,7 @@ namespace mr {
 		Vector3d v_s = dst*pend - dst*pstart;
 		Vector6d retVel;
 		retVel<< omega_s[0], omega_s[1], omega_s[2],v_s[0],v_s[1],v_s[2];
-		if(t>Tf)retVel = Vector6d::Zero();
+		if(t>Tf)retVel = Vector6dZero;
 		return retVel;
 	}
 	Vector6d CartesianAcc(const SE3& Xstart, const SE3& Xend, double t , double Tf, int method) {
@@ -640,7 +643,7 @@ namespace mr {
 		Vector3d vdot_s = ddst*pend - ddst*pstart;
 		Vector6d retAcc;
 		retAcc<< omegadot_s[0], omegadot_s[1], omegadot_s[2],vdot_s[0],vdot_s[1],vdot_s[2];
-		if(t>Tf)retAcc = Vector6d::Zero();
+		if(t>Tf)retAcc = Vector6dZero;
 		return retAcc;
 	}	
 	void rotm2eulm(SO3 R,SO3& Rz,SO3& Ry,SO3& Rx){
@@ -1017,10 +1020,10 @@ namespace mr {
 			Jacobian dJb= Jacobian::Zero();
 			for(int i = 0;i<JOINTNUM;i++){
 				Ji = Jb.col(i);
-				dJidt = Vector6d::Zero();
+				dJidt = Vector6dZero;
 				for(int j =0;j<JOINTNUM;j++){
 					Jj = Jb.col(j);
-					aJiaqj = Vector6d::Zero();
+					aJiaqj = Vector6dZero;
 					if(i<j){
 						aJiaqj = ad(Ji)*Jj;
 					}
@@ -1040,10 +1043,10 @@ namespace mr {
 			Vector3d wb;
 			wb<<Vb[0],Vb[1],Vb[2];
 
-			Matrix6d Ad = Matrix6d::Identity();
+			Matrix6d Ad = Matrix6dIdentity;
 			Ad.block<3,3>(3,3) = Rsb;
 
-			Matrix6d dAd = Matrix6d::Zero();
+			Matrix6d dAd = Matrix6dZero;
 			dAd.block<3,3>(3,3) = Rsb*VecToso3(wb);
 			dJa = (dAd*Jb+Ad*dJb);
 			return dJa;
@@ -1054,8 +1057,8 @@ namespace mr {
 		SE3 Tsb = FKinBody(M,Blist,thetaList);
 		SO3 Rsb = TransToR(Tsb);
 
-		Matrix6d AdRsb = Matrix6d::Identity();
-		AdRsb.block<3,3>(0,0) = Matrix3d::Identity();		
+		Matrix6d AdRsb = Matrix6dIdentity;
+		AdRsb.block<3,3>(0,0) = Matrix3dIdentity;		
 		AdRsb.block<3,3>(3,3) = Rsb;		
 		Jacobian Jb = JacobianBody(Blist,thetaList);
 		Jacobian Ja = AdRsb*Jb;
